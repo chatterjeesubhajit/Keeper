@@ -5,8 +5,7 @@ const app = express();
 const session=require("express-session");
 const cookieSession = require("cookie-session");
 const passport=require("passport");
-const CLIENT_HOME_PAGE_URL = "/home/";
-const CLIENT_LOGIN_PAGE_URL = "/";
+
 const authRoutes = require("./routes/auth-routes");
 const mongoose=require('mongoose');
 const cors=require("cors");
@@ -17,19 +16,25 @@ if(port==null || port== "")
   port=5000;
 };
 
+console.log(process.env.NODE_ENV);
+
+const CLIENT_HOME_PAGE_URL = process.env.NODE_ENV ==='production'?"/home/":"http://localhost:3000/home/";
+const CLIENT_LOGIN_PAGE_URL = process.env.NODE_ENV ==='production'?"/":"http://localhost:3000/";
+
+
 //adding below part before deploying to AWS
 const path = require("path");
 app.use(express.static(path.join(__dirname, "./build")));
 //adding above part before deploying to AWS
 
-app.use(cors());
-// app.use(
-//   cors({
-//     origin: 'http://localhost:3000',
-//     methods: "GET,HEAD,PUT,PATCH,POST,DELETE",
-//     credentials: true,
-//   })
-// );
+
+app.use(
+  cors({
+    origin: 'http://localhost:3000',
+    methods: "GET,HEAD,PUT,PATCH,POST,DELETE",
+    credentials: true,
+  })
+);
 
 app.use(express.json()); // this allows to get json from axios post
 app.use(express.urlencoded({ extended: false })); 
@@ -39,20 +44,12 @@ app.use(session({
   resave:false,
   saveUninitialized: false
 }));
-// const COOKIE_KEY=process.env.COOKIE_KEY;
-// app.use(
-//   cookieSession({
-//     name: "sessionSubhajit",
-//     keys: COOKIE_KEY,
-//     maxAge: 24 * 60 * 60 * 1000
-//   })
-// );
-// parse cookies
+
 app.use(cookieParser());
 
 app.use(passport.initialize());
 app.use(passport.session());
-const dbUri=process.env.DB_URI;
+const dbUri=process.env.NODE_ENV ==='production'?process.env.DB_PROD_URI:process.env.DB_URI;
 
 mongoose.connect(dbUri,{ useNewUrlParser: true,useUnifiedTopology: true,useFindAndModify: false},(err)=>{
   if(err){console.log(err);}else{console.log("connected to db successfully");}
@@ -77,25 +74,32 @@ const authCheck = (req, res, next) => {
     next();
   }
 };
-app.get("*", authCheck, (req, res) => {
-  // res.status(200).json({
-  //   authenticated: true,
-  //   message: "user successfully authenticated",
-  //   user: req.user,
-  //   cookies: req.cookies
-  // });
-  // res.redirect(CLIENT_LOGIN_PAGE_URL);
-  res.sendFile(path.join(__dirname, './build', 'index.html'));
-});
-
-
+if(process.env.NODE_ENV==="production"){
+  app.get("*", authCheck, (req, res) => {
+    res.sendFile(path.join(__dirname, './build', 'index.html'));
+  });  
+}
+else
+{
+  app.get("/", authCheck, (req, res) => {
+    res.status(200).json({
+      authenticated: true,
+      message: "user successfully authenticated",
+      user: req.user,
+      cookies: req.cookies
+    });
+    res.redirect(CLIENT_LOGIN_PAGE_URL);
+  });
+}
 
 app.post("/create",(req,res)=>
 {
     let newNote=new Note({ind:req.body.ind, title:req.body.title,content:req.body.content,bgColor:req.body.bgColor,fontColor:req.body.fontColor});
+    console.log(req.body);
     console.log("user details in create area");
     console.log(req.user);
-    User.findOne({userId:req.user.userId},(err,obj)=>{
+    
+    User.findOne({username:req.user.username},(err,obj)=>{
       if(!err){
         if(obj)
         {   
@@ -115,7 +119,7 @@ app.post("/create",(req,res)=>
 
 app.delete("/delete",(req,res)=>{
     console.log("reached here");
-    User.findOneAndUpdate({userId:req.user.userId},{$pull:{notes:{ind: req.body.index}}},(error,result)=>
+    User.findOneAndUpdate({username:req.user.username},{$pull:{notes:{ind: req.body.index}}},(error,result)=>
      { if(error)
       {
         console.log("could not remove the document with following id: "+req.body.index);
@@ -130,16 +134,16 @@ app.delete("/delete",(req,res)=>{
 
 
 app.patch("/update",(req,res)=>{
-    console.log("userid");
-    console.log(req.user.userId);
+    console.log("username");
+    console.log(req.user.username);
     console.log("ind");
     console.log(req.body.ind);
       User.updateOne(
-        { userId: req.user.userId, "notes.ind": req.body.ind },
+        { username:req.user.username, "notes.ind": req.body.ind },
         { $set:{"notes.$":req.body}}
         ,function(err,result){if(result){console.log("updated note");}});  
 
-})
+});
 
 
 
