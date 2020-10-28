@@ -36,7 +36,6 @@ passport.use(new GoogleStrategy({
   clientID: process.env.G_CLIENT_ID,
   clientSecret: process.env.G_CLIENT_SECRET,
   callbackURL: "/auth/google/redirect",
-  passReqToCallback:true,
   proxy:true,
   userProfileURL: "https://www.googleapis.com/oauth2/v3/userinfo"
 },
